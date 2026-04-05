@@ -10,11 +10,15 @@ Usage:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
+
+# Point DeerFlow config loader at backend/config.yaml regardless of cwd
+os.environ.setdefault("DEER_FLOW_CONFIG_PATH", str(BACKEND_DIR / "config.yaml"))
 
 from dotenv import load_dotenv
 
