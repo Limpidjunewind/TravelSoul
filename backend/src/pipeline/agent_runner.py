@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import uuid
 
 from langchain_core.messages import HumanMessage
 
@@ -49,9 +50,11 @@ Output your final answer as strict JSON with this exact shape, no markdown fence
 
 
 async def _ainvoke_agent(prompt: str) -> str:
-    agent = make_lead_agent({})
+    thread_id = f"pipeline-{uuid.uuid4()}"
+    config = {"configurable": {"thread_id": thread_id}}
+    agent = make_lead_agent(config)
     state = {"messages": [HumanMessage(content=prompt)]}
-    result = await agent.ainvoke(state)
+    result = await agent.ainvoke(state, config=config, context={"thread_id": thread_id})
     # Last AI message is the answer
     messages = result.get("messages", [])
     for msg in reversed(messages):
