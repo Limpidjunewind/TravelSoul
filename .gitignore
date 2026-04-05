@@ -49,3 +49,6 @@ architecture_feedback.docx
 tripagent_technical_architecture.docx
 Nomie Architecture Documentation.md
 
+# Docs folder (kept locally, excluded from remote)
+docs/
+
