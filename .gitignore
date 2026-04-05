@@ -52,3 +52,6 @@ Nomie Architecture Documentation.md
 # Docs folder (kept locally, excluded from remote)
 docs/
 
+# Frontend (kept locally, excluded from remote)
+frontend/
+
