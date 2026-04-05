@@ -150,8 +150,9 @@ CREATE TABLE proposals (
 
 Web 前端负责：
 - 收集所有用户偏好并写入 `user_preferences` 表
-- 完成 Google Calendar OAuth 授权并把 tokens 存入 `user_preferences.google_tokens`
 - 让用户把自己的 Telegram 账号跟该偏好记录关联（具体方式由 Web spec 定义）
+
+**Google Calendar OAuth 不由 Web 前端完成**（见 §9），而是由本地一次性脚本产出 tokens 并写入 `user_preferences.google_tokens`。Web 前端上**没有** "Connect Google Calendar" 按钮。
 
 **本 spec 的假设前提**：`user_preferences` 表里已经有有效的用户记录（包含 `telegram_user_id`、`google_tokens` 和所有偏好字段）。后台扫描器和 Telegram bot 都是基于这个前提运行。
 
@@ -267,37 +268,49 @@ for each user in user_preferences:
 - Bot 推送消息时根据 `telegram_user_id` 发送
 
 ### 推送消息形态
-**优先形态 B（inline buttons）**，失败降级到形态 A（纯文本 + 链接）：
 
-**形态 B（preferred）：**
+**核心原则：Telegram 消息极简，只负责"叮咚一声 + 链接"，所有细节在 Web 前端呈现。**
+
+不显示目的地名字、不显示机票/酒店信息、不显示数量提示。用户想看就点链接跳 Web，在 Web 前端从 `proposals.bundle_data` 读取完整的多目的地方案（A/B/C/D/E）并自己选。
+
+**① 新 proposal 通知**
 ```
-🎉 Hey Jamie! I found a trip plan for you.
+🎉 Hey Jamie! I've planned a trip for you.
 
-📅 Apr 20 - Apr 27 (7 days, you're free!)
-🌏 2 destinations: Tokyo, Busan
+📅 Apr 20 – Apr 27 (7 days)
 
-[ 🇯🇵 View Tokyo ]  [ 🇰🇷 View Busan ]
-[ 👀 View All Details ]
+👉 View details: {LINK}
 ```
 
-**形态 A（fallback）：**
+**② Confirmed trip 降价通知**（仅对已 confirm 并已写入 Google Calendar 的行程）
 ```
-🎉 Hey Jamie! I found a trip plan for you.
+💰 Good news! Your trip (Apr 20 – Apr 27) just dropped 20%+
 
-📅 Apr 20 - Apr 27 (7 days, you're free!)
-🌏 Tokyo or Busan
-
-👉 View details: https://nomie.app/proposals/abc123
+👉 View update: {LINK}
 ```
+
+- 不写具体价格数字，只说 "dropped X%+"，X = `user_preferences.price_drop_threshold`（默认 20）
+- Pending proposal **不发**降价通知（§7 规则 ③）
+
+`{LINK}` 在实现时用 `PROPOSAL_URL_BASE` 环境变量拼接，比如 `{PROPOSAL_URL_BASE}/proposals/{uuid}`。等 Web 前端部署地址确定后改这一个 env 即可。
 
 ---
 
 ## 9. Google Calendar 集成
 
 ### OAuth 流程
-OAuth 授权由 **Web 前端** 发起（详见 Web 前端 spec）。本 spec 只关心 OAuth 完成后的结果——`user_preferences.google_tokens` 里有有效的 access_token + refresh_token。
+OAuth 授权由**本地一次性脚本**完成，**Web 前端完全不碰 OAuth**。
 
-后台扫描器使用这些 tokens 读写 calendar，需要处理 token 过期的情况（用 refresh_token 刷新）。
+流程：
+1. 开发者（Jamie）在 Google Cloud Console 建 OAuth 2.0 client（Desktop app 类型），下载 `client_secret.json`
+2. 本地跑 `scripts/google_oauth_setup.py`，脚本启动一个本地 HTTP server + 打开浏览器 → 用户在浏览器里授权 → 脚本拿到 access_token + refresh_token
+3. 脚本把 tokens 直接写入目标 `user_preferences` 记录的 `google_tokens` 字段
+
+这个脚本是一次性工具，demo 前跑一次就够，不进 runtime 主流程。
+
+后台扫描器（runtime）只负责从 DB 读 tokens 使用，并在 access_token 过期时用 refresh_token 刷新、写回 DB。
+
+**为什么不做 Web OAuth**：demo 只有 1 个演示用户（Jamie 自己），Web OAuth 的 callback 路由 / HTTPS / redirect URI 对齐等工作量不划算。Pitch 时口头说 "in production this is embedded in the Web signup flow" 即可。
 
 ### Scopes
 - `https://www.googleapis.com/auth/calendar.readonly` — 读取 calendar 找空档
@@ -420,17 +433,34 @@ OAuth 授权由 **Web 前端** 发起（详见 Web 前端 spec）。本 spec 只
 
 ---
 
-## Appendix: 现有代码资产（从 IT5007 项目继承）
+## Appendix A: 现有代码资产（从 IT5007 项目继承）
 
 - `backend/src/agents/lead_agent/` — Lead Agent（已定制为 Nomie 旅行规划身份）
 - `backend/src/subagents/builtins/` — 4 个 travel sub-agents（flight-search / hotel-search / itinerary-planner / travel-tips）
 - `backend/config.yaml` — 已配置为 Agnes Claw Model
 - `backend/src/tools/` — tools 框架，可以扩展加 Duffel、LiteAPI、Open-Meteo 等新 tool
 
-**新增代码位置建议：**
-- `backend/src/bot/` — Telegram bot 逻辑
-- `backend/src/scheduler/` — 定时扫描
-- `backend/src/calendar/` — Google Calendar OAuth + API
+## Appendix B: Sub-Agent Tool 增强
+
+Nomie 本身的检索质量不强化，但**把真实的 travel API 封装成 LangChain tools 挂到现有 sub-agent 上**，让它们从"Tavily web 搜索"升级为"GDS 级真实数据"。
+
+| Sub-agent | 现有 tools | 新挂 tools |
+|-----------|-----------|-----------|
+| `flight-search` | web_search, web_fetch | **`duffel_tool`**（查航班、返回真实 offer） |
+| `hotel-search` | web_search, web_fetch | **`liteapi_tool`**（查酒店 sandbox 数据） |
+| `itinerary-planner` | web_search, web_fetch | （保持不变，用搜索 + LLM 推理） |
+| `travel-tips` | web_search, web_fetch | （保持不变，可选加 `open_meteo_tool` 查天气） |
+
+**Tool 挂载方式**：在对应 sub-agent 的定义文件里（`backend/src/subagents/builtins/flight_search.py` 等），把新 tool 加进 tools 列表。Sub-agent 的 system prompt 里提一句"Prefer duffel_tool for flight queries, fallback to web_search if duffel fails"，让 LLM 自己学会优先调用。
+
+**为什么做这个**：纯 web_search 返回的航班/酒店数据质量参差且经常过时，接上 Duffel/LiteAPI 之后 Nomie 输出的 `bundle_data` 里是真实可订航班，pitch 时 demo 效果天差地别。
+
+## Appendix C: 新增代码位置建议
+
+- `backend/src/pipeline/` — 主流程（scan_and_notify + telegram_sender 都放这里）
+- `backend/src/calendar_svc/` — Google Calendar API 封装（`calendar` 是 Python 标准库名，避免冲突）
 - `backend/src/db/` — SQLite 数据访问层
 - `backend/src/tools/builtins/duffel_tool.py` — Duffel 封装为 LangChain tool
 - `backend/src/tools/builtins/liteapi_tool.py` — LiteAPI 封装
+- `scripts/google_oauth_setup.py` — 一次性 OAuth 脚本（不在 src 下，因为不是 runtime 代码）
+- `scripts/trigger_scan.py` — demo 用的手动触发入口

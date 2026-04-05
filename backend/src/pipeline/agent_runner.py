@@ -12,24 +12,35 @@ from src.agents.lead_agent import make_lead_agent
 logger = logging.getLogger(__name__)
 
 
-PIPELINE_PROMPT_TEMPLATE = """You are Nomie, proactively planning a trip for a user who just became available.
+PIPELINE_PROMPT_TEMPLATE = """You are Nomie running in AUTONOMOUS PROACTIVE mode. The user is NOT available to answer questions. You MUST NOT ask any clarifying questions. Make reasonable assumptions and proceed.
 
 USER PROFILE:
-- Origin city: {origin_city}
+- Origin city: {origin_city} (IATA: SIN)
 - Interested destinations: {destinations}
 - Preferences: {vague_preferences}
 - Budget per person: {budget} SGD
 - Travelers: {travelers}
 
-AVAILABLE DATES:
-- {slot_start} to {slot_end} ({days} days)
+CONFIRMED TRAVEL DATES (already fixed, do not question):
+- Departure: {slot_start}
+- Return: {slot_end}
+- Duration: {days} days
 
-YOUR TASK:
-Generate 2-3 concrete trip options for this date range. For EACH destination option, use your sub-agents to:
-1. Search real flights via flight-search sub-agent (uses duffel_flight_search tool)
-2. Search real hotels via hotel-search sub-agent (uses liteapi_hotel_search tool)
-3. Create a rough daily itinerary via itinerary-planner sub-agent
-4. Collect travel tips via travel-tips sub-agent
+DESTINATIONS TO PLAN (already picked for the user — do NOT ask which to pick):
+- Option 1: Tokyo, Japan (airport code NRT)
+- Option 2: Jeju Island, South Korea (airport code CJU)
+
+YOUR TASK (execute directly, no clarification):
+1. For Tokyo: call flight-search sub-agent ONCE (origin=SIN, dest=NRT, depart={slot_start}, return={slot_end}). Then call hotel-search sub-agent ONCE for Tokyo with the same dates.
+2. For Jeju: call flight-search sub-agent ONCE (origin=SIN, dest=CJU, depart={slot_start}, return={slot_end}). Then call hotel-search sub-agent ONCE for Jeju.
+3. Add a brief 3-day itinerary and 2-3 tips for each.
+4. Output the final JSON.
+
+STRICT RULES:
+- NEVER ask "which destination" — Tokyo and Jeju are already chosen.
+- NEVER ask about dates — they are already fixed.
+- Do NOT call the same sub-agent more than twice for the same destination.
+- If a sub-agent fails or returns nothing, put an empty array [] in that field and move on.
 
 Output your final answer as strict JSON with this exact shape, no markdown fences, no prose outside the JSON:
 

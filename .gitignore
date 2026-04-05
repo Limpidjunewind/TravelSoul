@@ -37,6 +37,9 @@ deer-flow/
 
 # Backend runtime data
 .deer-flow/
+backend/google_client_secret.json
+backend/nomie.db
+backend/*.db
 
 # Vite cache
 .vite/
