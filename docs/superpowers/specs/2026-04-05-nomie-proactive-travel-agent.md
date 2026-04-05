@@ -20,7 +20,7 @@ Nomie 从"**用户主动聊天的旅行规划工具**"转型为"**24/7 自主运
 | 触发方式 | 用户主动提问 | Agent 后台自主运行 |
 | 日程感知 | ❌ | ✅ 读取 Google Calendar |
 | 打扰频率 | 每次提问都回复 | 只在发现机会时推送 |
-| 交互界面 | Web 聊天 | Telegram + Web（双 surface） |
+| 交互界面 | 单一 Web 聊天 | Web（设置+详情） + Telegram（推送） |
 | 产品形态 | 在线工具 | Digital Employee |
 
 ---
@@ -29,26 +29,30 @@ Nomie 从"**用户主动聊天的旅行规划工具**"转型为"**24/7 自主运
 
 ```
 ┌──────────────────────────────────────────────────────┐
+│  Web 前端（独立 spec，不在本文档范围）                  │
+│  - Onboarding（收集偏好 + Google Calendar OAuth）     │
+│  - /proposals/:uuid 详情展示                         │
+│  - Confirm / Reject 操作                             │
+│  - Settings（编辑偏好、阈值等）                        │
+└──────────────────────────────────────────────────────┘
+                       ↓ 写入 preferences
+┌──────────────────────────────────────────────────────┐
 │  Nomie Backend（复用 IT5007 项目的基础）              │
 │  Lead Agent + 4 Sub-agents + Agnes Claw Model        │
 │  + Duffel API (flights) + LiteAPI (hotels, backup)   │
 │         ↑                                            │
 │  作为"旅行规划引擎"被调度器调用                        │
 └──────────────────────────────────────────────────────┘
-      ↑                           ↑
+      ↑                           ↓
       │                           │
 ┌────────────────────┐  ┌─────────────────────────┐
 │  定时扫描器（新）    │  │  Telegram Bot（新）       │
-│  - 每天 1 次        │  │  - Onboarding 对话        │
-│  - 读 Calendar      │  │  - 主动推送通知           │
-│  - 发现空档+生成计划 │  │  - 不做查看命令           │
+│  - 每天 1 次        │  │  - 仅推送通知             │
+│  - 读 Calendar      │  │  - 不做 onboarding        │
+│  - 发现空档+生成计划 │  │  - 不做命令/查看          │
 └────────────────────┘  └─────────────────────────┘
                                     ↓ 用户点链接
-                        ┌─────────────────────────┐
-                        │  Web 前端（新，另起文档）  │
-                        │  - /proposals/:uuid      │
-                        │  - Confirm / Reject       │
-                        └─────────────────────────┘
+                             回到 Web 前端
                                     ↓ Confirm
                         ┌─────────────────────────┐
                         │  Google Calendar         │
@@ -57,9 +61,9 @@ Nomie 从"**用户主动聊天的旅行规划工具**"转型为"**24/7 自主运
 ```
 
 **三个 surface 各司其职**：
+- **Web 前端** = 重交互（onboarding、详情展示、settings、confirm/reject）—— 独立 spec
 - **后台扫描** = 自主思考的"大脑"
-- **Telegram bot** = 轻量 onboarding + 通知
-- **Web 前端** = 计划详情展示 + 最终确认（独立 spec 文档）
+- **Telegram bot** = **纯推送通道**，不做任何对话交互
 
 ---
 
@@ -140,27 +144,16 @@ CREATE TABLE proposals (
 
 ---
 
-## 4. Onboarding 流程（Telegram 对话式）
+## 4. Onboarding 流程
 
-用户第一次向 Bot 发送 `/start` 时触发。Bot 通过自然语言对话收集必要信息。
+**Onboarding 完全由 Web 前端负责**，本 spec 不涵盖。详见 Web 前端 spec。
 
-### 必须收集
-1. **出发城市**："你从哪里出发？"
-2. **想去的地方**："你想去哪些地方？可以是国家、地区或具体城市"
-   - 如果用户说很模糊（如"东南亚"），bot 追问细化（"马来西亚、泰国、印尼都可以？"）
-3. **预算**："预算大概多少（每人）？"
-4. **同行人数**："几个人一起？"
-5. **最小空档天数**："最少几天连续空档才帮你规划？"（默认 5）
-6. **模糊旅行偏好**："喜欢什么样的旅行？自然风光？城市探索？放松？看海？"
-7. **Google Calendar 授权**：Bot 生成一个 OAuth 链接，引导用户点击授权
+Web 前端负责：
+- 收集所有用户偏好并写入 `user_preferences` 表
+- 完成 Google Calendar OAuth 授权并把 tokens 存入 `user_preferences.google_tokens`
+- 让用户把自己的 Telegram 账号跟该偏好记录关联（具体方式由 Web spec 定义）
 
-### 不在 onboarding 收集（放到 web 前端的 settings）
-- 酒店星级
-- 航班偏好（直飞/转机、红眼航班）
-- 价格下跌通知阈值（默认 20%）
-
-### Onboarding 完成的标志
-用户完成 Google Calendar 授权，token 存入数据库。Bot 回复："All set! I'll watch your calendar and reach out when I find something good for you. 🌏"
+**本 spec 的假设前提**：`user_preferences` 表里已经有有效的用户记录（包含 `telegram_user_id`、`google_tokens` 和所有偏好字段）。后台扫描器和 Telegram bot 都是基于这个前提运行。
 
 ---
 
@@ -255,15 +248,23 @@ for each user in user_preferences:
 ## 8. Telegram Bot 设计
 
 ### 定位
-**轻量级工具**，只做 onboarding 和推送，不做查看/管理命令。
+**纯推送通道**。Bot 不做 onboarding、不支持查看命令、不跟用户对话。
 
-### 支持的 commands
-- `/start` — 开始 onboarding（新用户）或重新开始对话（老用户）
-- 其他命令**不做**（包括 /proposals, /trips, /preferences, /settings 等）
+### 不做的事
+- ❌ Onboarding 对话（由 Web 前端负责）
+- ❌ `/proposals`、`/trips`、`/preferences` 等查看命令
+- ❌ 响应用户的自由文本消息（或只回一句"Please use the web app"）
 
-### 用户主动消息
-- 如果用户在聊天里发自由文本，bot 视为 onboarding 的一部分或追问，LLM 理解后更新 preferences
-- 不支持"查看已有 proposals"这类请求，bot 会回复"请到你的日历或 web 端查看"
+### 做的事
+- ✅ 收到后台扫描器的指令后，给指定的 `telegram_user_id` 推送消息
+- ✅ 推送"新 proposal 生成"通知
+- ✅ 推送"confirmed trip 大幅降价"通知
+
+### Bot 初始化
+- 通过 BotFather 创建 bot 拿到 bot token
+- Bot token 存入 `.env`
+- 用户在 Web 前端 onboarding 时，需要提供自己的 Telegram username 或 user_id，存入 `user_preferences.telegram_user_id`
+- Bot 推送消息时根据 `telegram_user_id` 发送
 
 ### 推送消息形态
 **优先形态 B（inline buttons）**，失败降级到形态 A（纯文本 + 链接）：
@@ -294,11 +295,9 @@ for each user in user_preferences:
 ## 9. Google Calendar 集成
 
 ### OAuth 流程
-1. Onboarding 时 bot 发送一个 auth link：`https://{your-domain}/oauth/google?tg_user={id}`
-2. 用户点击 → 跳到 Google OAuth 授权页
-3. 授权后回调到后端 `/oauth/google/callback?code={code}&state={tg_user}`
-4. 后端用 code 换 access_token + refresh_token，存入 `user_preferences.google_tokens`
-5. 后端发消息给对应 tg_user："Calendar connected! 🎉"
+OAuth 授权由 **Web 前端** 发起（详见 Web 前端 spec）。本 spec 只关心 OAuth 完成后的结果——`user_preferences.google_tokens` 里有有效的 access_token + refresh_token。
+
+后台扫描器使用这些 tokens 读写 calendar，需要处理 token 过期的情况（用 refresh_token 刷新）。
 
 ### Scopes
 - `https://www.googleapis.com/auth/calendar.readonly` — 读取 calendar 找空档
@@ -374,20 +373,21 @@ for each user in user_preferences:
 ## 12. Demo 设置
 
 ### 演示账号
-- **Telegram**：Jamie 的个人账号
+- **Telegram**：Jamie 的个人账号（user_id 提前存进 user_preferences）
 - **Google Calendar**：Jamie 的个人日历，提前填一些真实日程 + 故意留一个 7 天空档
-- **preferences**：提前填好（如：新加坡出发、想去日本/韩国、预算 5000 SGD、喜欢看海）
+- **preferences**：通过 Web 前端 onboarding 预先填好（新加坡出发、想去日本/韩国、预算 5000 SGD、喜欢看海...）
 
 ### Demo 流程
-1. 展示当前 calendar（有明显的空档）
-2. 触发扫描（/admin/scan 或手动按钮）
-3. 等待 agent 工作（30 秒~1 分钟）
-4. Telegram 弹出通知
-5. 点击通知里的链接，跳到 web 前端
-6. Web 前端展示 proposal bundle（多目的地选项）
-7. 选一个，点 Confirm
-8. 跳回 Telegram 显示"已加入日历"
+1. 展示 Web 前端已完成的 onboarding（或快速过一遍）
+2. 展示当前 calendar（有明显的空档）
+3. 触发扫描（/admin/scan 或手动按钮）
+4. 等待 agent 工作（30 秒~1 分钟）
+5. Telegram 弹出通知
+6. 点击通知里的链接，跳到 web 前端
+7. Web 前端展示 proposal bundle（多目的地选项）
+8. 选一个，点 Confirm
 9. 切回 Google Calendar 展示新增的 event
+10. （可选）再次触发扫描，模拟"价格下跌"，展示降价通知
 
 ### Pitch 5 分钟结构
 - **0:00-0:30** 痛点：用户每次要规划旅行都要花大量时间搜比价
