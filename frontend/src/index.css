@@ -1,0 +1,112 @@
+/* Pixel fonts */
+@font-face {
+  font-family: 'Ark Pixel';
+  src: url('/assets/pixel/ark-pixel-12px-proportional-latin.ttf.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Ark Pixel CN';
+  src: url('/assets/pixel/ark-pixel-12px-proportional-zh_cn.ttf.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Pixel palette — extracted from office_bg */
+  --color-primary: #A0522D;       /* warm brick brown */
+  --color-primary-light: #C4885A;
+  --color-primary-dark: #5C3D2E;  /* dark wood */
+  --color-secondary: #5B8C5A;     /* plant green */
+  --color-accent: #D4A843;        /* gold/lamp warm */
+  --color-bg: #F5E6D0;            /* parchment cream */
+  --color-bg-sidebar: #E8D5BC;    /* warm sidebar */
+  --color-bg-chat: #FAF0E4;       /* lighter cream */
+  --color-text: #3B2412;          /* dark brown */
+  --color-text-light: #7A6350;    /* muted brown */
+  --color-border: #C4A882;        /* tan border */
+
+  /* Agent status colors — pixel-friendly */
+  --color-status-idle: #8B8682;
+  --color-status-working: #5B8C5A;
+  --color-status-done: #4A9E4A;
+  --color-status-error: #C0392B;
+
+  /* Sizing */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 0px;
+  --chat-width-compressed: 28%;
+
+  /* Pixel border shorthand */
+  --pixel-border: 3px solid var(--color-primary-dark);
+  --pixel-border-light: 2px solid var(--color-border);
+  --pixel-shadow: 4px 4px 0px var(--color-primary-dark);
+  --pixel-shadow-sm: 2px 2px 0px var(--color-primary-dark);
+
+  /* Fonts */
+  font-family: 'Ark Pixel', 'Ark Pixel CN', monospace;
+  line-height: 1.8;
+  font-weight: normal;
+  font-size: 14px;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+
+  /* Pixel rendering */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Ark Pixel', 'Ark Pixel CN', monospace;
+  font-weight: normal;
+  letter-spacing: 1px;
+}
+
+/* Pixel-style scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+  border-left: var(--pixel-border-light);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border: 2px solid var(--color-primary-dark);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Shared pixel button base */
+button {
+  font-family: 'Ark Pixel', 'Ark Pixel CN', monospace;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: 'Ark Pixel', 'Ark Pixel CN', monospace;
+}
+
+a {
+  font-family: 'Ark Pixel', 'Ark Pixel CN', monospace;
+}

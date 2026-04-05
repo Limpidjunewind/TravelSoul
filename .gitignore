@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment
+.env
+.env.local
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Personal files
+papers/
+pics/
+IT5007-CourseProject.pdf
+
+# Reference code
+deer-flow/
+
+# Backend runtime data
+.deer-flow/
+
+# Vite cache
+.vite/
+
+# Feedback docs
+architecture_feedback.docx
+tripagent_technical_architecture.docx
+Nomie Architecture Documentation.md
+
+# Internal dev plans
+docs/superpowers/
