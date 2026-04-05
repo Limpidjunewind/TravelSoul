@@ -51,8 +51,8 @@ def liteapi_hotel_search_tool(
             resp = client.get(f"{LITEAPI_BASE_URL}/hotels/rates", headers=headers, params=params)
             resp.raise_for_status()
             data = resp.json()
-    except httpx.HTTPError as e:
-        return json.dumps({"error": f"LiteAPI request failed: {e}"})
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
+        return json.dumps({"error": f"LiteAPI request failed: {e}", "hotels": []})
 
     hotels = data.get("data", [])[:5]
     normalized = []
