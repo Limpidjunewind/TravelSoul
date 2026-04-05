@@ -1,0 +1,129 @@
+# Nomie Travel Agent Configuration
+# Based on DeerFlow config.example.yaml, trimmed for travel planning use case.
+
+# ============================================================================
+# Models Configuration
+# ============================================================================
+
+models:
+  - name: agnes-1.5-pro
+    display_name: Agnes 1.5 Pro
+    use: langchain_openai:ChatOpenAI
+    model: sapiens-ai/agnes-1.5-pro
+    base_url: https://zenmux.ai/api/v1
+    api_key: $ZENMUX_API_KEY
+    max_tokens: 4096
+    temperature: 0.7
+
+# ============================================================================
+# Tool Groups Configuration
+# ============================================================================
+
+tool_groups:
+  - name: web
+  - name: travel
+
+# ============================================================================
+# Tools Configuration
+# ============================================================================
+
+tools:
+  # Web search tool (requires Tavily API key)
+  - name: web_search
+    group: web
+    use: src.community.tavily.tools:web_search_tool
+    max_results: 5
+
+  # Web fetch tool (uses Jina AI reader)
+  - name: web_fetch
+    group: web
+    use: src.community.jina_ai.tools:web_fetch_tool
+    timeout: 10
+
+  # Duffel flight search (GDS-level real data)
+  - name: duffel_flight_search
+    group: travel
+    use: src.tools.builtins.duffel_tool:duffel_flight_search_tool
+
+  # LiteAPI hotel search (sandbox)
+  - name: liteapi_hotel_search
+    group: travel
+    use: src.tools.builtins.liteapi_tool:liteapi_hotel_search_tool
+
+# ============================================================================
+# Sandbox Configuration
+# ============================================================================
+
+sandbox:
+  use: src.sandbox.local:LocalSandboxProvider
+
+# ============================================================================
+# Subagents Configuration
+# ============================================================================
+
+subagents:
+  timeout_seconds: 300
+  agents:
+    flight-search:
+      timeout_seconds: 300
+    hotel-search:
+      timeout_seconds: 300
+    itinerary-planner:
+      timeout_seconds: 300
+    travel-tips:
+      timeout_seconds: 300
+
+# ============================================================================
+# Skills Configuration
+# ============================================================================
+
+skills:
+  container_path: /mnt/skills
+
+# ============================================================================
+# Title Generation
+# ============================================================================
+
+title:
+  enabled: true
+  max_words: 6
+  max_chars: 60
+  model_name: null
+
+# ============================================================================
+# Summarization
+# ============================================================================
+
+summarization:
+  enabled: true
+  model_name: null
+  trigger:
+    - type: tokens
+      value: 15564
+  keep:
+    type: messages
+    value: 10
+  trim_tokens_to_summarize: 15564
+  summary_prompt: null
+
+# ============================================================================
+# Memory
+# ============================================================================
+
+memory:
+  enabled: true
+  storage_path: memory.json
+  debounce_seconds: 30
+  model_name: null
+  max_facts: 100
+  fact_confidence_threshold: 0.7
+  injection_enabled: true
+  max_injection_tokens: 2000
+
+# ============================================================================
+# Checkpointer
+# ============================================================================
+
+checkpointer:
+  type: sqlite
+  connection_string: checkpoints.db
